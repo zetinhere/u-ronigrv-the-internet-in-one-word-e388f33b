@@ -86,6 +86,20 @@ const ranked = [...CANDIDATES]
 // nobody reaches for first. "Feral" it is.
 for (const r of ranked) console.log(`${r.word}: ${r.total.toFixed(2)}`);
 
+// Rev 2 — winner-margin sanity check: the pick must win outright, not
+// on the length tie-break. If a scoring change ever collapses the
+// margin, the entry is no longer a confident pick and the program
+// should fail here instead of shipping a coin flip. (As scored,
+// Feral 4.70 clears the runner-up, Madhouse 3.45, by 1.25.)
+const margin = ranked[0].total - ranked[1].total;
+console.log(`margin over runner-up: ${margin.toFixed(2)}`);
+if (!(margin > 0)) {
+  throw new Error(
+    `no outright winner: ${ranked[0].word} ${ranked[0].total.toFixed(2)} vs ` +
+      `${ranked[1].word} ${ranked[1].total.toFixed(2)}`,
+  );
+}
+
 const WORD = ranked[0].word;
 
 // The sealed gate only accepts UTF-8 text of 1 to 30 characters that is
@@ -115,3 +129,20 @@ const written = readFileSync(outPath, "utf8");
 if (written !== WORD) {
   throw new Error(`wrote ${JSON.stringify(written)}, expected ${JSON.stringify(WORD)}`);
 }
+
+// Rev 2 — byte-level verification: compare the raw bytes, not just the
+// decoded string, and explicitly reject a trailing newline (0x0a).
+// A string comparison could mask an encoding slip; the gate counts
+// bytes, so the bytes are what must match, exactly.
+const writtenBytes = readFileSync(outPath);
+const expectedBytes = Buffer.from(WORD, "utf8");
+if (!writtenBytes.equals(expectedBytes)) {
+  throw new Error(
+    `byte mismatch: wrote ${writtenBytes.toString("hex")}, ` +
+      `expected ${expectedBytes.toString("hex")}`,
+  );
+}
+if (writtenBytes.length === 0 || writtenBytes[writtenBytes.length - 1] === 0x0a) {
+  throw new Error("output is empty or ends with a newline");
+}
+console.log(`verified ${writtenBytes.length} bytes: ${JSON.stringify(written)}`);
